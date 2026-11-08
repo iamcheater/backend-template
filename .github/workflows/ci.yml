@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Lint, build, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:check
+      - run: npm run build
+      - run: npm test
+
+  database:
+    name: Migrations and e2e tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jeenj_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      JWT_SECRET: ci-only-jwt-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+
+      - name: Apply all migrations to an empty database
+        run: npm run migration:run
+        env:
+          NODE_ENV: production
+          POSTGRES_DATABASE: jeenj_migrations
+
+      - name: Fail if entities changed without a migration
+        run: npm run migration:check
+        env:
+          NODE_ENV: production
+          POSTGRES_DATABASE: jeenj_migrations
+
+      - name: Run seeders against the migrated schema
+        run: npm run seed:all
+        env:
+          NODE_ENV: production
+          POSTGRES_DATABASE: jeenj_migrations
+          SUPER_ADMIN_EMAIL: ci@jeenj.am
+          SUPER_ADMIN_PASSWORD: Ci-only-Passw0rd!
+
+      - name: Create the e2e database
+        run: psql -h localhost -U postgres -c "CREATE DATABASE jeenj_e2e"
+        env:
+          PGPASSWORD: postgres
+
+      - name: E2E tests
+        run: npm run test:e2e -- --runInBand
+        env:
+          NODE_ENV: test
+          POSTGRES_DATABASE: jeenj_e2e
