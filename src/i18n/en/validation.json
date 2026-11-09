@@ -17,7 +17,6 @@
   "isArray": "Must be a list.",
   "arrayUnique": "The list must not contain duplicates.",
   "arrayNotEmpty": "Choose at least one option.",
-  "isSocialLinkUrl": "Enter an https:// link (or a viber:// link for Viber).",
   "equals": "This must be accepted.",
   "isTranslatedText": "English text is required.",
   "isTranslatedTextLength": "English text is required, and each language must be {min}–{max} characters.",

@@ -36,8 +36,8 @@ async function bootstrap() {
 
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Jeenj API')
-      .setDescription('Jeenj backend API reference')
+      .setTitle('Backend API')
+      .setDescription('Backend API reference')
       .setVersion('1.0')
       .addBearerAuth()
       .build();

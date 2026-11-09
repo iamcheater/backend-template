@@ -1,23 +1,9 @@
 import 'dotenv/config';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AdminService } from '../../src/modules/admin/admin.service';
-import { ForCleanersSectionService } from '../../src/modules/for-cleaners/for-cleaners-section.service';
-import { HowItWorksSectionService } from '../../src/modules/how-it-works/how-it-works-section.service';
-import { PrivacyPolicyService } from '../../src/modules/privacy-policy/privacy-policy.service';
-import { SocialLinkService } from '../../src/modules/social-link/social-link.service';
-import { StandardsService } from '../../src/modules/standards/standards.service';
-import { TalkToUsService } from '../../src/modules/talk-to-us/talk-to-us.service';
-import { TermsAndConditionsService } from '../../src/modules/terms-and-conditions/terms-and-conditions.service';
-import { seedForCleanersSection } from './for-cleaners/for-cleaners-section.seed';
-import { seedHowItWorksSection } from './how-it-works/how-it-works-section.seed';
+import { AdminService } from '../../src/core/admin/admin.service';
 import { seedSuperAdmin } from './admin/super-admin.seed';
-import { seedPrivacyPolicy } from './privacy-policy/privacy-policy.seed';
 import { SeederModule } from './seeder.module';
-import { seedSocialLinks } from './social-link/social-links.seed';
-import { seedStandards } from './standards/standards.seed';
-import { seedTalkToUs } from './talk-to-us/talk-to-us.seed';
-import { seedTermsAndConditions } from './terms-and-conditions/terms-and-conditions.seed';
 
 interface Seeder {
   name: string;
@@ -26,28 +12,6 @@ interface Seeder {
 
 const SEEDERS: Seeder[] = [
   { name: 'super-admin', run: (app) => seedSuperAdmin(app.get(AdminService)) },
-  {
-    name: 'social-links',
-    run: (app) => seedSocialLinks(app.get(SocialLinkService)),
-  },
-  {
-    name: 'how-it-works',
-    run: (app) => seedHowItWorksSection(app.get(HowItWorksSectionService)),
-  },
-  { name: 'standards', run: (app) => seedStandards(app.get(StandardsService)) },
-  { name: 'talk-to-us', run: (app) => seedTalkToUs(app.get(TalkToUsService)) },
-  {
-    name: 'privacy-policy',
-    run: (app) => seedPrivacyPolicy(app.get(PrivacyPolicyService)),
-  },
-  {
-    name: 'terms-and-conditions',
-    run: (app) => seedTermsAndConditions(app.get(TermsAndConditionsService)),
-  },
-  {
-    name: 'for-cleaners',
-    run: (app) => seedForCleanersSection(app.get(ForCleanersSectionService)),
-  },
 ];
 
 const selectSeeders = (requested: string[]): Seeder[] => {

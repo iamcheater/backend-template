@@ -1,24 +1,23 @@
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import * as request from 'supertest';
 import { Repository } from 'typeorm';
 import { AppModule } from 'src/app.module';
-import { AdminEntity } from 'src/modules/admin/entities';
-import { AdminRole } from 'src/modules/admin/enums';
-import { UserEntity } from 'src/modules/users/entities';
+import { AdminEntity } from 'src/core/admin/entities';
+import { AdminRole } from 'src/core/admin/enums';
 
 describe('Admin (e2e)', () => {
   let app: INestApplication;
   let adminRepository: Repository<AdminEntity>;
-  let userRepository: Repository<UserEntity>;
+  let jwtService: JwtService;
 
   const adminPassword = 'AdminPass123!';
   const superAdminPassword = 'SuperAdminPass123!';
-  const adminEmail = 'e2e-admin@jeenj.com';
-  const superAdminEmail = 'e2e-super-admin@jeenj.com';
-  const regularUserEmail = 'e2e-regular-user@jeenj.com';
+  const adminEmail = 'e2e-admin@example.com';
+  const superAdminEmail = 'e2e-super-admin@example.com';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -29,7 +28,7 @@ describe('Admin (e2e)', () => {
     await app.init();
 
     adminRepository = moduleFixture.get(getRepositoryToken(AdminEntity));
-    userRepository = moduleFixture.get(getRepositoryToken(UserEntity));
+    jwtService = moduleFixture.get(JwtService, { strict: false });
     await adminRepository.save([
       adminRepository.create({
         email: adminEmail,
@@ -47,7 +46,6 @@ describe('Admin (e2e)', () => {
   afterAll(async () => {
     await adminRepository.delete({ email: adminEmail });
     await adminRepository.delete({ email: superAdminEmail });
-    await userRepository.delete({ email: regularUserEmail });
     await app.close();
   });
 
@@ -91,19 +89,15 @@ describe('Admin (e2e)', () => {
     expect(meResponse.body.data.password).toBeUndefined();
   });
 
-  it('GET /admin/me rejects a regular user token (no cross-domain token reuse)', async () => {
-    await userRepository.save(
-      userRepository.create({
-        email: regularUserEmail,
-        password: await bcrypt.hash('UserPass123!', 10),
-      }),
-    );
-    const loginResponse = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: regularUserEmail, password: 'UserPass123!' })
-      .expect(201);
-
-    const { accessToken } = loginResponse.body.data;
+  it('GET /admin/me rejects a validly signed token whose type is not admin (no cross-domain token reuse)', async () => {
+    const admin = await adminRepository.findOneOrFail({
+      where: { email: adminEmail },
+    });
+    const accessToken = jwtService.sign({
+      sub: admin.id,
+      email: admin.email,
+      type: 'user',
+    });
 
     await request(app.getHttpServer())
       .get('/admin/me')
@@ -116,7 +110,7 @@ describe('Admin (e2e)', () => {
     let superAdminToken: string;
     let createdAdminToken: string;
     let createdAdminId: number;
-    const createdEmail = 'e2e-created-admin@jeenj.com';
+    const createdEmail = 'e2e-created-admin@example.com';
 
     beforeAll(async () => {
       const adminLogin = await request(app.getHttpServer())
@@ -147,7 +141,7 @@ describe('Admin (e2e)', () => {
         .post('/admin')
         .set('Authorization', `Bearer ${superAdminToken}`)
         .send({
-          email: 'e2e-weak-password@jeenj.com',
+          email: 'e2e-weak-password@example.com',
           password: 'weakpassword',
         })
         .expect(400);
@@ -242,7 +236,7 @@ describe('Admin (e2e)', () => {
       const response = await request(app.getHttpServer())
         .patch('/admin/me')
         .set('Authorization', `Bearer ${createdAdminToken}`)
-        .send({ email: 'should-not-change@jeenj.com' })
+        .send({ email: 'should-not-change@example.com' })
         .expect(200);
 
       expect(response.body.data.email).toBe(createdEmail);

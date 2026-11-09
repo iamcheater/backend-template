@@ -1,11 +1,11 @@
 # Deploying the backend
 
-How to deploy `jeenj_backend`. There are two environments:
+How to deploy a backend built from this template. There are two environments, both on Railway:
 
 | Environment | Branch | Backend | Website / admin | `NODE_ENV` |
 |---|---|---|---|---|
 | **Dev / QA** | `develop` | Railway (this file) | Vercel | `develop` |
-| **Production** | `main` | AWS, configured in the `jeenj_ops` repo | AWS | `production` |
+| **Production** | `main` | Railway | Vercel | `production` |
 
 Work lands on `develop`, gets tested on Railway, then is merged to `main` for production. Everything runs from the compiled `dist/` build: nothing on the server needs `ts-node`.
 
@@ -40,13 +40,14 @@ One-time setup, done in the dashboards:
 
 `.env.example` is the template for the git-ignored env files, which have the same variables in the same order: `.env` for local development, `.env.prod` for production, and the dev values set directly in Railway's Variables tab. Values that matter for a deploy:
 
-| Variable | Dev (Railway) | Production (AWS) |
+| Variable | Dev | Production |
 |---|---|---|
 | `NODE_ENV` | `develop`. Migrations only, Swagger `/docs` stays on for QA. | `production`. Migrations only, Swagger `/docs` hidden. |
-| `PORT` | Don't set; Railway provides it | `3060` |
+| `PORT` | Don't set; Railway provides it | Don't set; Railway provides it |
 | `POSTGRES_*` | Railway Postgres, via references | Production database |
-| `JWT_SECRET` | Own random string | Own random string, never shared with dev |
-| `CORS_ORIGINS` | The Vercel dev website and admin origins (exact URLs; preview URLs aren't matched) | e.g. `https://jeenj.am,https://www.jeenj.am,https://admin.jeenj.am` |
+| `ADMIN_JWT_SECRET` | Own random string | Own random string, never shared with dev |
+| `ADMIN_JWT_EXPIRES_IN` | Optional, defaults to `14d` | Optional, defaults to `14d` |
+| `CORS_ORIGINS` | The Vercel dev website and admin origins (exact URLs; preview URLs aren't matched) | e.g. `https://example.com,https://www.example.com,https://admin.example.com` |
 
 The rest apply to both environments, with separate values per environment:
 
@@ -58,7 +59,7 @@ The rest apply to both environments, with separate values per environment:
 | `ADMIN_DASHBOARD_URL` | Admin base URL, for "View" buttons in Telegram messages |
 | `TELEGRAM_*` | Dev uses its own bot or chat, so QA submissions don't notify the real team |
 | `AWS_*`, `MEDIA_*` | Dev uses its own bucket (or prefix) and IAM key. The bucket must allow public `s3:GetObject`: media URLs are permanent public links, not signed ones. |
-| `MEDIA_PUBLIC_BASE_URL` | Optional. Defaults to `https://<AWS_S3_BUCKET>.s3.<AWS_REGION>.amazonaws.com`; set it to the CloudFront domain (e.g. `https://media.jeenj.am`) once one fronts the bucket. |
+| `MEDIA_PUBLIC_BASE_URL` | Optional. Defaults to `https://<AWS_S3_BUCKET>.s3.<AWS_REGION>.amazonaws.com`; set it to the CloudFront domain (e.g. `https://media.example.com`) once one fronts the bucket. |
 | `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` | Only needed until the first deploy creates the super admin. Remove them afterwards. Once a super admin exists, the seeder skips without them, so deploys keep working. |
 
 Generate secrets with `openssl rand -hex 32`.
@@ -84,14 +85,13 @@ Run migrations **before** starting the new build: the new code expects the new s
 `seed:prod` runs every seeder independently: one failing seeder is reported and the others still run. The command exits non-zero if any failed, so a deploy script notices.
 
 ```bash
-npm run seed:prod                          # all seeders
-npm run seed:prod -- social-links          # just one
-npm run seed:prod -- standards talk-to-us  # several
+npm run seed:prod                 # all seeders
+npm run seed:prod -- super-admin  # just the named one(s)
 ```
 
-Available: `super-admin`, `social-links`, `how-it-works`, `standards`, `talk-to-us`, `privacy-policy`, `terms-and-conditions`, `for-cleaners`.
+Available: `super-admin`. Each feature that needs fixed rows adds its own seeder to `database/seeders/seed-all.ts`.
 
-Every seeder only creates rows that are missing and never overwrites what an admin has edited. That's why re-running after a failure, or on every deploy, is safe. For example, `social-links` creates the Viber and Messenger rows on a database that only has the original ten platforms.
+Every seeder only creates rows that are missing and never overwrites what an admin has edited. That's why re-running after a failure, or on every deploy, is safe.
 
 ## 4. Rollback
 
@@ -105,23 +105,10 @@ On Railway, run the revert from the service's shell or locally with `railway run
 
 ## 5. Migrations: the single baseline
 
-All earlier migrations were squashed into one `database/migrations/<timestamp>-InitialSchema.ts`, generated against an empty database from the current entities. New schema changes go into new migrations on top of it, one per task (see CLAUDE.md).
+The template ships without migrations. A new client project starts by generating one `InitialSchema` baseline against an empty database:
 
-**Moving an existing develop/production database to the baseline**, done once:
+```bash
+npm run migration:generate -- database/migrations/InitialSchema
+```
 
-- **The database holds nothing worth keeping:** drop and recreate it, then follow step 2. The baseline builds the whole schema, and the seeders fill in the content rows.
-- **The database has data to keep:**
-  1. Back it up: `pg_dump -Fc -f before-baseline.dump <db>`.
-  2. Bring its schema up to date with the old migrations. Every old migration must have been applied, so that the schema matches the current entities.
-  3. Replace the old rows in the `migrations` table with the baseline, so TypeORM treats it as already applied:
-     ```sql
-     BEGIN;
-     DELETE FROM migrations;
-     INSERT INTO migrations ("timestamp", name) VALUES (<timestamp>, 'InitialSchema<timestamp>');
-     COMMIT;
-     ```
-     Use the timestamp from the baseline's file name.
-  4. Check it: `npm run migration:show:prod` lists `[X] InitialSchema...`.
-     - Also run `npm run migration:generate -- database/migrations/Check` from a checkout pointed at that database. It should report "No changes in database schema". If it generates a file, the database differs from the entities: delete the file and investigate before deploying.
-
-Once production holds real data, don't squash migrations again.
+Review it, commit it, and put every later schema change in its own migration on top of it, one per task (see CLAUDE.md). Once production holds real data, never squash migrations.

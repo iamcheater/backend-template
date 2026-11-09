@@ -35,7 +35,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: jeenj_migrations
+          POSTGRES_DB: app_migrations
         ports:
           - 5432:5432
         options: >-
@@ -48,7 +48,7 @@ jobs:
       POSTGRES_PORT: 5432
       POSTGRES_USERNAME: postgres
       POSTGRES_PASSWORD: postgres
-      JWT_SECRET: ci-only-jwt-secret
+      ADMIN_JWT_SECRET: ci-only-admin-jwt-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,24 +61,24 @@ jobs:
         run: npm run migration:run
         env:
           NODE_ENV: production
-          POSTGRES_DATABASE: jeenj_migrations
+          POSTGRES_DATABASE: app_migrations
 
       - name: Fail if entities changed without a migration
         run: npm run migration:check
         env:
           NODE_ENV: production
-          POSTGRES_DATABASE: jeenj_migrations
+          POSTGRES_DATABASE: app_migrations
 
       - name: Run seeders against the migrated schema
         run: npm run seed:all
         env:
           NODE_ENV: production
-          POSTGRES_DATABASE: jeenj_migrations
-          SUPER_ADMIN_EMAIL: ci@jeenj.am
+          POSTGRES_DATABASE: app_migrations
+          SUPER_ADMIN_EMAIL: ci@example.com
           SUPER_ADMIN_PASSWORD: Ci-only-Passw0rd!
 
       - name: Create the e2e database
-        run: psql -h localhost -U postgres -c "CREATE DATABASE jeenj_e2e"
+        run: psql -h localhost -U postgres -c "CREATE DATABASE app_e2e"
         env:
           PGPASSWORD: postgres
 
@@ -86,4 +86,4 @@ jobs:
         run: npm run test:e2e -- --runInBand
         env:
           NODE_ENV: test
-          POSTGRES_DATABASE: jeenj_e2e
+          POSTGRES_DATABASE: app_e2e

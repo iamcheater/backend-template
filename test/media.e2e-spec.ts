@@ -5,16 +5,16 @@ import * as bcrypt from 'bcrypt';
 import * as request from 'supertest';
 import { Repository } from 'typeorm';
 import { AppModule } from 'src/app.module';
-import { AdminEntity } from 'src/modules/admin/entities';
-import { AdminRole } from 'src/modules/admin/enums';
-import { S3Service } from 'src/modules/media/s3.service';
+import { AdminEntity } from 'src/core/admin/entities';
+import { AdminRole } from 'src/core/admin/enums';
+import { S3Service } from 'src/core/media/s3.service';
 
 describe('Media (e2e)', () => {
   let app: INestApplication;
   let adminRepository: Repository<AdminEntity>;
   let adminToken: string;
 
-  const adminEmail = 'e2e-media-admin@jeenj.com';
+  const adminEmail = 'e2e-media-admin@example.com';
   const adminPassword = 'AdminPass123!';
 
   beforeAll(async () => {
@@ -53,7 +53,7 @@ describe('Media (e2e)', () => {
 
   describe('POST /uploads/presign (admin-guarded)', () => {
     const validPayload = {
-      purpose: 'service-image',
+      purpose: 'example-image',
       contentType: 'image/webp',
       fileSize: 1024,
     };
@@ -73,7 +73,7 @@ describe('Media (e2e)', () => {
         .expect(201);
 
       expect(response.body.data.uploadUrl).toBe('https://signed-url');
-      expect(response.body.data.key).toMatch(/^service-image\/.+\.webp$/);
+      expect(response.body.data.key).toMatch(/^example-image\/.+\.webp$/);
       expect(response.body.data.expiresAt).toBeDefined();
     });
 

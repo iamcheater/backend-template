@@ -1,7 +1,7 @@
 {
-  "name": "jeenj_backend",
+  "name": "backend-template",
   "version": "0.0.1",
-  "description": "Jeenj backend",
+  "description": "NestJS backend template for client projects",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

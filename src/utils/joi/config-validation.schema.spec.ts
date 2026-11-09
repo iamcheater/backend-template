@@ -8,8 +8,8 @@ const requiredEnv = {
   POSTGRES_PORT: '5432',
   POSTGRES_USERNAME: 'postgres',
   POSTGRES_PASSWORD: 'postgres',
-  POSTGRES_DATABASE: 'jeenj',
-  JWT_SECRET: 'secret',
+  POSTGRES_DATABASE: 'backend',
+  ADMIN_JWT_SECRET: 'secret',
 };
 
 describe('configValidationSchema', () => {

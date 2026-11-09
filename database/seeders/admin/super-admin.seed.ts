@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcrypt';
-import { AdminService } from '../../../src/modules/admin/admin.service';
-import { AdminRole } from '../../../src/modules/admin/enums';
+import { AdminService } from '../../../src/core/admin/admin.service';
+import { AdminRole } from '../../../src/core/admin/enums';
 
 export async function seedSuperAdmin(
   adminService: AdminService,

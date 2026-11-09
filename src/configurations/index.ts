@@ -5,11 +5,17 @@ export const appConfig = () => ({
     trustProxy: parseInt(process.env.TRUST_PROXY ?? '0', 10),
     internalApiKey: process.env.INTERNAL_API_KEY,
     adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL,
-    jwtSecret: process.env.JWT_SECRET,
     corsOrigins: (process.env.CORS_ORIGINS ?? '')
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
+  },
+});
+
+export const adminAuthConfig = () => ({
+  adminAuth: {
+    jwtSecret: process.env.ADMIN_JWT_SECRET,
+    jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '14d',
   },
 });
 

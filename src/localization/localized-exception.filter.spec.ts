@@ -10,7 +10,7 @@ import {
   RequestValidationException,
   TooManyRequestsException,
 } from 'src/common/exceptions';
-import { UploadTooLargeException } from 'src/modules/media/exceptions';
+import { UploadTooLargeException } from 'src/core/media/exceptions';
 import { LocalizedExceptionFilter } from './localized-exception.filter';
 
 describe('LocalizedExceptionFilter', () => {

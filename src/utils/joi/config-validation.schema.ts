@@ -16,7 +16,11 @@ export const configValidationSchema = Joi.object({
   POSTGRES_PASSWORD: Joi.string().allow('').required(),
   POSTGRES_DATABASE: Joi.string().required(),
 
-  JWT_SECRET: Joi.string().required(),
+  ADMIN_JWT_SECRET: Joi.string().required(),
+  ADMIN_JWT_EXPIRES_IN: Joi.string()
+    .pattern(/^\d+[smhd]$/)
+    .allow('')
+    .optional(),
 
   AWS_REGION: Joi.string().allow('').optional(),
   AWS_ACCESS_KEY_ID: Joi.string().allow('').optional(),
