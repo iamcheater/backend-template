@@ -18,8 +18,8 @@
   "arrayUnique": "The list must not contain duplicates.",
   "arrayNotEmpty": "Choose at least one option.",
   "equals": "This must be accepted.",
-  "isTranslatedText": "English text is required.",
-  "isTranslatedTextLength": "English text is required, and each language must be {min}–{max} characters.",
+  "isTranslatedText": "Text in the default language is required.",
+  "isTranslatedTextLength": "Text in the default language is required, and each language must be {min}–{max} characters.",
   "isDateString": "Enter a valid date.",
   "isNotPastDate": "The date cannot be in the past."
 }

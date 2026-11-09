@@ -1,5 +1,6 @@
 import { TranslatedTextPatch } from 'src/common/types';
-import { DEFAULT_LANGUAGE, SupportedLanguage } from './supported-language.enum';
+import { getDefaultLanguage } from './language-settings';
+import { SupportedLanguage } from './supported-language.enum';
 
 export function localize(
   text: TranslatedTextPatch | null,
@@ -9,7 +10,7 @@ export function localize(
     return null;
   }
 
-  return text[language] || text[DEFAULT_LANGUAGE] || null;
+  return text[language] || text[getDefaultLanguage()] || null;
 }
 
 export function mergeTranslatedText<T extends TranslatedTextPatch>(

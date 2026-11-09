@@ -21,5 +21,6 @@
   "TOO_MANY_REQUESTS": "Too many requests. Please wait a moment and try again.",
   "REQUEST_FAILED": "The request could not be completed.",
   "RECORD_ALREADY_EXISTS": "A record with these details already exists.",
-  "RECORD_IN_USE": "This record is linked to other data, so it can't be changed or removed."
+  "RECORD_IN_USE": "This record is linked to other data, so it can't be changed or removed.",
+  "SECTION_NOT_FOUND": "This section was not found."
 }

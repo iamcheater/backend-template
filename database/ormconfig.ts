@@ -1,8 +1,8 @@
-import 'dotenv/config';
 import { join } from 'path';
 import { DataSource, DataSourceOptions } from 'typeorm';
-import { AdminEntity } from '../src/core/admin/entities';
-import { MediaAssetEntity } from '../src/core/media/entities';
+import { loadEnvFile } from '../src/configurations';
+
+loadEnvFile();
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -11,9 +11,9 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.POSTGRES_USERNAME,
   password: process.env.POSTGRES_PASSWORD,
   database: process.env.POSTGRES_DATABASE,
-  entities: [AdminEntity, MediaAssetEntity],
+  entities: [join(__dirname, '..', 'src', '**', '*.entity.{ts,js}')],
   migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
-  synchronize: ['local', 'test'].includes(process.env.NODE_ENV ?? ''),
+  synchronize: false,
   logging: false,
 };
 

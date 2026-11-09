@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type Sharp from 'sharp';
 import { Repository } from 'typeorm';
+import { runOnTransactionCommit, Transactional } from 'typeorm-transactional';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp = require('sharp') as typeof Sharp;
@@ -92,6 +93,46 @@ export class MediaService {
     }
 
     return saved;
+  }
+
+  @Transactional()
+  async deleteAssets(mediaAssets: MediaAssetEntity[]): Promise<void> {
+    if (mediaAssets.length === 0) {
+      return;
+    }
+
+    await this.mediaAssetRepository.delete(
+      mediaAssets.map((mediaAsset) => mediaAsset.id),
+    );
+
+    const keys = mediaAssets.flatMap((mediaAsset) =>
+      this.storedKeysOf(mediaAsset),
+    );
+
+    runOnTransactionCommit(() => {
+      void this.deleteStoredFiles(keys);
+    });
+  }
+
+  async deleteStoredFiles(keys: string[]): Promise<void> {
+    await Promise.all(
+      keys.map(async (key) => {
+        try {
+          await this.s3Service.deleteObject(key);
+        } catch (error) {
+          this.logger.error(
+            `Failed to delete S3 object ${key}`,
+            error instanceof Error ? error.stack : String(error),
+          );
+        }
+      }),
+    );
+  }
+
+  storedKeysOf(mediaAsset: MediaAssetEntity): string[] {
+    return [
+      ...new Set([mediaAsset.key, ...Object.values(mediaAsset.variants ?? {})]),
+    ];
   }
 
   resolveMediaUrls(mediaAsset: MediaAssetEntity): ResolvedMediaUrls {

@@ -1,9 +1,11 @@
-import 'dotenv/config';
 import { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { loadEnvFile } from '../../src/configurations';
 import { AdminService } from '../../src/core/admin/admin.service';
 import { seedSuperAdmin } from './admin/super-admin.seed';
 import { SeederModule } from './seeder.module';
+
+loadEnvFile();
 
 interface Seeder {
   name: string;

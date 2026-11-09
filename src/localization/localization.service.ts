@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { DEFAULT_LANGUAGE, SupportedLanguage } from './supported-language.enum';
+import { getDefaultLanguage } from './language-settings';
+import { SupportedLanguage } from './supported-language.enum';
 
 @Injectable()
 export class LocalizationService {
@@ -8,7 +9,7 @@ export class LocalizationService {
 
   translate(
     key: string,
-    lang: SupportedLanguage = DEFAULT_LANGUAGE,
+    lang: SupportedLanguage = getDefaultLanguage(),
     args?: Record<string, unknown>,
   ): string {
     return this.i18n.translate(key, { lang, args });

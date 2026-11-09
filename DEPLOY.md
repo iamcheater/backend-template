@@ -38,7 +38,7 @@ One-time setup, done in the dashboards:
 
 ## 1. Environment
 
-`.env.example` is the template for the git-ignored env files, which have the same variables in the same order: `.env` for local development, `.env.prod` for production, and the dev values set directly in Railway's Variables tab. Values that matter for a deploy:
+`.env.example` is the template for the three git-ignored env files, which have the same variables in the same order: `.env.local` for local development, and `.env.develop` / `.env.prod` as the reference copies of what is set in Railway's Variables tab. Values that matter for a deploy:
 
 | Variable | Dev | Production |
 |---|---|---|
@@ -47,6 +47,9 @@ One-time setup, done in the dashboards:
 | `POSTGRES_*` | Railway Postgres, via references | Production database |
 | `ADMIN_JWT_SECRET` | Own random string | Own random string, never shared with dev |
 | `ADMIN_JWT_EXPIRES_IN` | Optional, defaults to `14d` | Optional, defaults to `14d` |
+| `SUPPORTED_LANGUAGES` / `DEFAULT_LANGUAGE` | Same as production | The client's languages, e.g. `hy,en,ru` and `hy`. Startup fails if the default is not in the list. |
+| `WEBSITE_URL` | The Vercel dev website | The production website |
+| `WEBSITE_REVALIDATE_SECRET` | 32+ random characters, same value as the dev website | 32+ random characters, same value as the production website, never shared with dev |
 | `CORS_ORIGINS` | The Vercel dev website and admin origins (exact URLs; preview URLs aren't matched) | e.g. `https://example.com,https://www.example.com,https://admin.example.com` |
 
 The rest apply to both environments, with separate values per environment:
@@ -105,10 +108,4 @@ On Railway, run the revert from the service's shell or locally with `railway run
 
 ## 5. Migrations: the single baseline
 
-The template ships without migrations. A new client project starts by generating one `InitialSchema` baseline against an empty database:
-
-```bash
-npm run migration:generate -- database/migrations/InitialSchema
-```
-
-Review it, commit it, and put every later schema change in its own migration on top of it, one per task (see CLAUDE.md). Once production holds real data, never squash migrations.
+The template ships one `InitialSchema` baseline (`admins`, `media_assets`). A new client project keeps it and adds every later schema change in its own migration on top of it, one per task (see CLAUDE.md). `synchronize` is off everywhere, so the schema only ever comes from migrations. Once production holds real data, never squash migrations.

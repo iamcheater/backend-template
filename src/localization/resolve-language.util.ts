@@ -1,9 +1,8 @@
 import { Request } from 'express';
-import { DEFAULT_LANGUAGE, SupportedLanguage } from './supported-language.enum';
+import { getDefaultLanguage, isSupportedLanguage } from './language-settings';
+import { SupportedLanguage } from './supported-language.enum';
 
-export function isSupportedLanguage(value: string): value is SupportedLanguage {
-  return (Object.values(SupportedLanguage) as string[]).includes(value);
-}
+export { isSupportedLanguage };
 
 export function resolveLanguage(request: Request): SupportedLanguage {
   const headerLanguage =
@@ -24,5 +23,5 @@ export function resolveLanguage(request: Request): SupportedLanguage {
     }
   }
 
-  return DEFAULT_LANGUAGE;
+  return getDefaultLanguage();
 }

@@ -50,7 +50,7 @@ The first version (the MVP) is built quickly from this template, and deeper work
 
 Do not add a dependency without saying why in the PR.
 
-**Dependency pinning is deliberate, not stale.** `@nestjs/config`, `@nestjs/jwt`, `@nestjs/passport`, `@nestjs/typeorm` and `@nestjs/swagger` may be pinned below their npm `latest` tags because newer majors can ship ESM-only (`"type": "module"`) and break this project's CommonJS `tsconfig.json` / `ts-jest` setup. Never run a bare `npm update` or `npm install <pkg>@latest` on them. Before upgrading, check that the new version's `package.json` has no `"type": "module"`.
+**Dependency pinning is deliberate, not stale.** `@nestjs/config`, `@nestjs/jwt`, `@nestjs/passport`, `@nestjs/typeorm` and `@nestjs/swagger` may be pinned below their npm `latest` tags because newer majors can ship ESM-only (`"type": "module"`) and break this project's CommonJS `tsconfig.json` / `ts-jest` setup. `@nestjs/event-emitter` is pinned to `~3.1.0` for the same reason: 12.x is ESM-only. Never run a bare `npm update` or `npm install <pkg>@latest` on them. Before upgrading, check that the new version's `package.json` has no `"type": "module"`.
 
 ## Commands
 
@@ -62,7 +62,7 @@ npm run start:prod          # Run the compiled build
 
 npm test                    # Unit tests (all)
 npx jest path/to.spec.ts    # One unit test file
-npm run test:e2e            # E2E tests (test/jest-e2e.json)
+npm run test:e2e            # E2E tests (test/jest-e2e.json); needs NODE_ENV=test and a dedicated test database in the shell env
 npm run test:cov            # Coverage report
 
 npm run migration:generate  # Generate a migration from entity changes
@@ -90,7 +90,7 @@ Every project (backend, website, admin) keeps the same three files. All three al
 | `.env.develop` | The develop deployment on Railway, for QA and client review |
 | `.env.prod` | Production. The source of the values entered into Railway |
 
-`ConfigModule` loads `.env.local` locally. On Railway, variables are entered in the service settings and injected by the platform. `.env.develop` and `.env.prod` are reference files: keeping them in the project makes it easy to compare what differs between environments.
+`ConfigModule`, `database/ormconfig.ts` and the seeders load `.env.local` locally, through `loadEnvFile()` / `ENV_FILE_PATH` in `src/configurations/index.ts`. It is never loaded when `NODE_ENV=test`: e2e tests take every variable from the shell, as CI does, so they can never hit the local database or a real Telegram chat. On Railway, variables are entered in the service settings and injected by the platform. `.env.develop` and `.env.prod` are reference files: keeping them in the project makes it easy to compare what differs between environments.
 
 `.env.example` **is** committed. It lists every key with an empty or safe placeholder value.
 
@@ -137,13 +137,14 @@ project-root/
 │   ├── app.module.ts              root module; every module is registered here
 │   │
 │   ├── core/                      what every client gets. Do not change without the lead's approval
-│   │   ├── admin-auth/            admin login, admin JWT strategy and guards
+│   │   ├── admin-auth/            admin login, admin JWT strategy, guards (incl. the global default-deny guard)
 │   │   ├── admin/                 admin accounts and admin management
 │   │   ├── media/                 S3 presigned uploads, media assets, image variants, file deletion
 │   │   ├── notifications/
+│   │   │   ├── notifications.module.ts  registers the channels (NOTIFICATION_CHANNELS)
 │   │   │   ├── notifier.service.ts    the one entry point features call
 │   │   │   └── channels/
-│   │   │       └── telegram/          the default channel
+│   │   │       └── telegram/          the default channel (telegram.channel.ts)
 │   │   ├── revalidation/          calls the website's revalidate route
 │   │   └── health/                /health and /health/db
 │   │
@@ -151,6 +152,7 @@ project-root/
 │   │   └── example-content/       the reference module every new feature copies
 │   │
 │   ├── integrations/              event listeners: react to feature events, never called directly
+│   │   ├── integrations.module.ts
 │   │   └── website-revalidation.listener.ts
 │   │
 │   ├── common/                    shared infrastructure, no feature logic
@@ -188,6 +190,9 @@ project-root/
 │       └── <feature>/
 │
 ├── test/                          e2e specs + jest-e2e.json + setup
+│   ├── global-setup-e2e.ts        runs the migrations once before the suite (NODE_ENV=test only)
+│   ├── helpers/                   createAdmin, loginAdmin, overrideEnv, waitFor
+│   └── fixtures/                  test-only modules (e2e-section exercises the section base)
 ├── .github/workflows/ci.yml
 ├── railway.json
 └── nest-cli.json                  copies i18n assets to dist; Swagger CLI plugin
@@ -251,6 +256,7 @@ feature/
 ### 2. Everything is guarded unless it is public website content
 
 - Every admin endpoint requires the admin guard. Every endpoint that is not meant for the public website is guarded.
+- **Default deny.** `AdminJwtDefaultGuard` is registered globally (`APP_GUARD` in `AdminAuthModule`): a route without `@Public()` requires an admin token even if its `@UseGuards` was forgotten. Admin routes are marked `@Public()` only to skip this global pass, and then apply `@UseGuards(AdminJwtAuthGuard, RolesGuard)` themselves, so the admin is loaded once per request.
 - Public endpoints are only the ones the website reads (`.../active` content, site settings) and the website's form submissions. Mark them `@Public()` deliberately.
 - Public form endpoints use `@SubmissionThrottle()` and spam protection checked on the backend.
 - Public content may be read freely. Never expose a private record (a submission, an admin) through a public route.
@@ -259,29 +265,32 @@ feature/
 
 - Features never call the website, revalidation, or any other side-effect service directly.
 - When a feature creates, updates or deletes admin-managed content, it emits a `ContentChangedEvent` (from `src/common/events`) carrying the content's tag (e.g. `services`, `site-settings`).
-- Listeners in `src/integrations/` react to events. `website-revalidation.listener.ts` calls `RevalidationService`, which posts the changed tags to the website's `/api/revalidate` route with `WEBSITE_REVALIDATE_SECRET`.
-- Emit the event only after the database write succeeds.
+- Emit through `EventEmitter2` (`@nestjs/event-emitter`): `eventEmitter.emit(EventName.CONTENT_CHANGED, new ContentChangedEvent(TAG))`.
+- Listeners in `src/integrations/` react to events (registered in `IntegrationsModule`). `website-revalidation.listener.ts` calls `RevalidationService`, which sends `POST {WEBSITE_URL}/api/revalidate` with the JSON body `{ "tags": [...] }` and the header `x-revalidate-secret: {WEBSITE_REVALIDATE_SECRET}`. The website's route must check that header. Without `WEBSITE_URL` or the secret it skips with a warning.
+- Emit the event only after the database write succeeds: inside a `@Transactional()` method, emit from `runOnTransactionCommit(...)` (as `SectionService.update` does), so a rolled-back write never revalidates.
 - A failed side effect (website down, timeout) is logged, never thrown back into the admin's request. The admin's save always succeeds if the database write did.
 - Tags are named after the content module and must match the website's cache tags. Keep them as constants in the emitting module.
 
 ### 4. Notifications go through `NotifierService`
 
-- Features call `NotifierService.notify(...)` from `src/core/notifications`. They never import a channel (Telegram, email) directly.
+- Features import `NotificationsModule` and call `NotifierService.notify({ title, fields?, adminPath? })` from `src/core/notifications`. They never import a channel (Telegram, email) directly. `adminPath` (e.g. `/requests?search=%2357`) becomes the "View" button. `notify` never rejects.
 - Telegram is the default channel: messages go to the client's group through our bot, as HTML, with inline buttons where useful (e.g. "View" deep-linking into the admin dashboard via `ADMIN_DASHBOARD_URL`).
-- Escape every user-provided value with the channel's escape helper before it goes into a message.
+- Features pass plain text. Each channel escapes every value with its own helper before it goes into a message (Telegram: `escapeTelegramHtml` on the title, every label and every value), so a feature never builds channel markup.
 - A channel that is not configured skips quietly with a warning log. A channel that fails logs the error and never fails the request that triggered it.
-- Email is added later as another folder under `channels/`, when a client asks for it. Adding a channel must not require changing any feature.
+- Email is added later as another folder under `channels/`, when a client asks for it: a class implementing `NotificationChannel`, added to the `NOTIFICATION_CHANNELS` factory in `notifications.module.ts`. Adding a channel must not require changing any feature.
 
 ### 5. Content sections use the shared section base
 
 - A page section that is one editable record (hero, about, contact block, legal text) extends `SectionEntity` from `src/common/entities` and uses the `SectionService` base from `src/common/sections`.
-- The base provides get-for-admin, get-active-for-public (localized), update with translated-text merging, and the `ContentChangedEvent`.
+- The base provides get-for-admin, get-active-for-public (localized), update with translated-text merging, and the `ContentChangedEvent`: `getForAdmin()`, `getActiveForPublic(language)`, `update(patch)` and `ensureSeeded(defaults)`. A subclass sets `contentTag` and `translatedFields` and passes its repository and `EventEmitter2` to `super`.
+- `SectionEntity` adds `isActive` (column `is_active`, default `true`). An inactive section returns `404 SECTION_NOT_FOUND` publicly, while admins still read and edit it. A nullable translated field that loses its last translation is stored as `null`.
+- Section seeders call `ensureSeeded(defaults)`, which creates the row only when the table is empty and never overwrites it.
 - A section row is created by a seeder, never by an API call. There is no create or delete route for a section.
 - Lists of items (services, team members, FAQs) are regular feature modules modelled on `example-content`, not sections.
 
 ### 6. Translatable content is one JSONB object per field
 
-- Every admin-managed text field that can differ by language is declared `@TranslatedColumn()` (a `jsonb` column) and typed `TranslatedText` (the default language is always present) or `TranslatedTextPatch | null` for nullable fields, from `src/common/types`.
+- Every admin-managed text field that can differ by language is declared `@TranslatedColumn()` (a `jsonb` column) and typed `TranslatedText` (the default language is always present, guaranteed at runtime by `@IsTranslatedText()` because the default comes from config and cannot be a compile-time type) or `TranslatedTextPatch | null` for nullable fields, from `src/common/types`.
 - Not translatable: user submissions, contact info, admin accounts.
 - **Two response shapes, deliberately.** Admin endpoints return full `{ hy, en, ru }` objects so the dashboard edits every language from one response. Public endpoints take `@RequestLanguage()` and return plain strings through `localize(text, language)`, which falls back to the default language when a translation is missing or empty.
 - **Writes merge, never replace.** DTO fields use `@TrimTranslatedText()` and `@IsTranslatedText({...})`. Create DTOs require the default language. Update DTOs use `partial: true`. Nullable fields add `allowClearingDefault: true`. Services always persist through `mergeTranslatedText(current, patch)`, also on create (with `current = null`). It drops keys set to `''`, which is how an admin removes a translation, so empty strings never reach the database. Pass the generic explicitly inside `repository.create({...})`.
@@ -290,7 +299,8 @@ feature/
 
 ### 7. Languages come from config
 
-- `SUPPORTED_LANGUAGES` and `DEFAULT_LANGUAGE` set which languages this client uses. A client can run on `hy` alone or on all three. Adding a language to a client is a config change, not a migration.
+- `SUPPORTED_LANGUAGES` and `DEFAULT_LANGUAGE` set which languages this client uses. A client can run on `hy` alone or on all three. Adding a language to a client is a config change, not a migration. Unset, they default to `hy,en,ru` and `en`. Startup fails if a listed language is not shipped or the default is not in the list.
+- `LocalizationModule` applies them at startup (`configureLanguages` in `src/localization/language-settings.ts`). Code reads them through `getSupportedLanguages()` / `getDefaultLanguage()`, never a constant: language resolution, `localize`, `@IsTranslatedText()` (which also rejects languages the client does not use) and the i18n fallback all follow config.
 - The template ships `src/i18n/hy`, `src/i18n/en` and `src/i18n/ru`. Every `src/i18n/<lang>/*.json` file has exactly the same key set. A new key goes into every language file in the same change.
 - Adding a language the template does not ship means adding its i18n folder and its value to the language enum, together.
 - **Request language resolution:** `language` / `x-language` header, then `Accept-Language`, then `DEFAULT_LANGUAGE`. A language not in `SUPPORTED_LANGUAGES` falls back to the default.
@@ -337,7 +347,7 @@ The global `TransformInterceptor` wraps every successful response into `{ succes
 
 ### 14. Configuration access
 
-- Read config through `ConfigService.get('<namespace>.<key>')`, never `process.env`, except in `src/configurations/index.ts`, `database/ormconfig.ts` and `database/seeders/**` (standalone CLI entry points outside Nest DI, which use `import 'dotenv/config'`).
+- Read config through `ConfigService.get('<namespace>.<key>')`, never `process.env`, except in `src/configurations/index.ts`, `database/ormconfig.ts` and `database/seeders/**` (standalone CLI entry points outside Nest DI, which call `loadEnvFile()` from `src/configurations`).
 - Seed-only secrets (`SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`) stay out of `ConfigService` entirely.
 
 ### 15. Media: S3 holds files, the database holds keys
@@ -348,7 +358,7 @@ The global `TransformInterceptor` wraps every successful response into `{ succes
 - `attachFromKey` checks that the key belongs to the declared purpose.
 - Images get variants (thumbnail, medium, full) through `sharp`.
 - Media is served through permanent public URLs (`MEDIA_PUBLIC_BASE_URL`, defaulting to the bucket URL), not expiring signed links.
-- **Deleting a record, or replacing an image, also deletes its files from S3, variants included.** The S3 delete runs **after** the database delete or update succeeds, so a failed transaction never leaves a record pointing at a missing file. A failed S3 delete is logged, never thrown back to the admin.
+- **Deleting a record, or replacing an image, also deletes its files from S3, variants included.** The S3 delete runs **after** the database delete or update succeeds, so a failed transaction never leaves a record pointing at a missing file. A failed S3 delete is logged, never thrown back to the admin. Use `MediaService.deleteAssets(assets)`: it deletes the `media_assets` rows inside the current transaction (or its own) and schedules the S3 deletes, original plus every variant, with `runOnTransactionCommit`. Call it from the same `@Transactional()` method that deletes or updates the record. `deleteStoredFiles(keys)` deletes files only, for rows that are already gone.
 
 ### 16. Swagger
 
@@ -378,7 +388,7 @@ Integer auto-increment primary keys. They are simple and searchable ("check requ
 
 ### Entity registration
 
-`database/ormconfig.ts` finds entities with a glob on `*.entity.ts`, so a new entity is picked up by the app, the migration CLI and the seeders automatically. **The only rule: every entity file is named `<name>.entity.ts`.** A differently named file is invisible to TypeORM, so no table is created and the app fails at runtime.
+`database/ormconfig.ts` finds entities with a glob on `*.entity.ts`, so a new entity is picked up by the app, the migration CLI and the seeders automatically. **The only rule: every entity file is named `<name>.entity.ts`.** A differently named file is invisible to TypeORM, so no table is created and the app fails at runtime. `test/database.e2e-spec.ts` fails if any `@Entity` class lives in another file. The app's TypeORM factory also sets `autoLoadEntities: true`, so test-only fixture entities registered with `forFeature` join the DataSource. It changes nothing for `src/` entities, which the glob already loads.
 
 `database/ormconfig.ts` is the single source of truth for connection options, imported by `app.module.ts`, the seeders and the migration CLI.
 
@@ -386,7 +396,7 @@ Integer auto-increment primary keys. They are simple and searchable ("check requ
 
 ### Synchronize is off everywhere
 
-`synchronize` is `false` in every environment, local and test included. The schema comes only from migrations, so every developer's database matches what production builds. E2E test setup runs the migrations against the test database before the suite.
+`synchronize` is `false` in every environment, local and test included. The schema comes only from migrations, so every developer's database matches what production builds. E2E test setup (`test/global-setup-e2e.ts`) runs the migrations against the test database before the suite, and refuses to run unless `NODE_ENV=test`.
 
 ### Migrations
 
@@ -425,6 +435,7 @@ Tests are the safety net Claude Code relies on to make sure a change did not bre
 - **The template ships e2e tests for all of core:** admin login, token expiry, deleted-admin lockout, guards and roles (401 vs 403), admin management, media uploads and deletion, the section base, the exception filter and error shape, validation messages, and language resolution.
 - **Every new feature module adds an e2e spec**, copied from `test/example-content.e2e-spec.ts`, covering its public and admin endpoints, auth, validation and status codes.
 - **Unit tests** are co-located (`*.service.spec.ts`, `*.controller.spec.ts`) for every service or controller with real logic, with repositories and dependencies mocked. Pure DTOs and barrels need none.
+- **E2E tests need a dedicated database.** They run only with `NODE_ENV=test`, read every variable from the shell (never `.env.local`), and run the migrations themselves before the suite, e.g. `NODE_ENV=test POSTGRES_HOST=localhost POSTGRES_PORT=5432 POSTGRES_USERNAME=postgres POSTGRES_PASSWORD=postgres POSTGRES_DATABASE=<app>_e2e ADMIN_JWT_SECRET=e2e npm run test:e2e -- --runInBand`. A spec that needs other settings sets them with `overrideEnv` before compiling the app and restores them afterwards. A spec builds one `AppModule` at most, because `typeorm-transactional` registers the DataSource once per test file.
 - **Run the full suite before declaring work done**, not only the new tests: `npm run lint:check`, `npm run build`, `npm test` and `npm run test:e2e`. Passing tests are part of "done", not a follow-up.
 - **Never edit, skip or delete an existing test to make it pass.** If an existing test fails after a change, stop and report it: either the change broke something or the requirement changed, and a person decides which.
 - No coverage threshold. The bar is meaningful tests for the logic that was written or changed.

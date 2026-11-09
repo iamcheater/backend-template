@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   AcceptLanguageResolver,
@@ -16,14 +17,20 @@ import {
   adminAuthConfig,
   appConfig,
   awsConfig,
+  ENV_FILE_PATH,
+  languageConfig,
   mediaConfig,
+  shouldLoadEnvFile,
   telegramConfig,
+  websiteConfig,
 } from './configurations';
 import { AdminAuthModule } from './core/admin-auth/admin-auth.module';
 import { AdminModule } from './core/admin/admin.module';
 import { HealthModule } from './core/health/health.module';
 import { MediaModule } from './core/media/media.module';
-import { TelegramModule } from './core/notifications/channels/telegram/telegram.module';
+import { NotificationsModule } from './core/notifications';
+import { RevalidationModule } from './core/revalidation/revalidation.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { LocalizationModule } from './localization/localization.module';
 import { configValidationSchema } from './utils/joi';
 
@@ -31,17 +38,21 @@ import { configValidationSchema } from './utils/joi';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ENV_FILE_PATH,
+      ignoreEnvFile: !shouldLoadEnvFile(),
       load: [
         appConfig,
         adminAuthConfig,
         awsConfig,
         telegramConfig,
         mediaConfig,
+        languageConfig,
+        websiteConfig,
       ],
       validationSchema: configValidationSchema,
     }),
     TypeOrmModule.forRootAsync({
-      useFactory: () => dataSourceOptions,
+      useFactory: () => ({ ...dataSourceOptions, autoLoadEntities: true }),
       dataSourceFactory: (options?: DataSourceOptions) => {
         if (!options) {
           throw new Error('Invalid TypeORM data source options');
@@ -55,7 +66,7 @@ import { configValidationSchema } from './utils/joi';
     I18nModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        fallbackLanguage: 'en',
+        fallbackLanguage: configService.get<string>('language.default'),
         loaderOptions: {
           path: join(__dirname, 'i18n/'),
           watch: configService.get<string>('app.nodeEnv') === 'local',
@@ -66,6 +77,7 @@ import { configValidationSchema } from './utils/joi';
         AcceptLanguageResolver,
       ],
     }),
+    EventEmitterModule.forRoot(),
     ServeStaticDefinition,
     CommonModule,
     LocalizationModule,
@@ -73,7 +85,9 @@ import { configValidationSchema } from './utils/joi';
     AdminModule,
     AdminAuthModule,
     MediaModule,
-    TelegramModule,
+    NotificationsModule,
+    RevalidationModule,
+    IntegrationsModule,
   ],
 })
 export class AppModule {}

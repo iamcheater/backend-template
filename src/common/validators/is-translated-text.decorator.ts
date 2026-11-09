@@ -5,8 +5,11 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { isSupportedLanguage } from 'src/localization/resolve-language.util';
-import { DEFAULT_LANGUAGE } from 'src/localization/supported-language.enum';
+import {
+  getDefaultLanguage,
+  getSupportedLanguages,
+  isSupportedLanguage,
+} from 'src/localization/language-settings';
 
 export interface TranslatedTextRules {
   partial?: boolean;
@@ -33,7 +36,7 @@ class IsTranslatedTextConstraint implements ValidatorConstraintInterface {
       return false;
     }
 
-    const defaultValue = value[DEFAULT_LANGUAGE];
+    const defaultValue = value[getDefaultLanguage()];
     const defaultMayBeAbsent = rules.partial === true;
     const defaultMayBeEmpty = rules.allowClearingDefault === true;
 
@@ -60,7 +63,7 @@ class IsTranslatedTextConstraint implements ValidatorConstraintInterface {
         ? ` of ${rules.minLength ?? 1}-${rules.maxLength} characters`
         : '';
 
-    return `${args.property} must be an object of { en, hy, ru } strings${length}, with en required`;
+    return `${args.property} must be an object of { ${getSupportedLanguages().join(', ')} } strings${length}, with ${getDefaultLanguage()} required`;
   }
 }
 

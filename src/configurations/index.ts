@@ -1,3 +1,24 @@
+import { config } from 'dotenv';
+
+export const ENV_FILE_PATH = '.env.local';
+
+export const shouldLoadEnvFile = (): boolean => process.env.NODE_ENV !== 'test';
+
+export const loadEnvFile = (): void => {
+  if (shouldLoadEnvFile()) {
+    config({ path: ENV_FILE_PATH, quiet: true });
+  }
+};
+
+const parseList = (value: string): string[] =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+export const DEFAULT_SUPPORTED_LANGUAGES = 'hy,en,ru';
+export const FALLBACK_DEFAULT_LANGUAGE = 'en';
+
 export const appConfig = () => ({
   app: {
     port: parseInt(process.env.PORT ?? '3060', 10),
@@ -5,10 +26,7 @@ export const appConfig = () => ({
     trustProxy: parseInt(process.env.TRUST_PROXY ?? '0', 10),
     internalApiKey: process.env.INTERNAL_API_KEY,
     adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL,
-    corsOrigins: (process.env.CORS_ORIGINS ?? '')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    corsOrigins: parseList(process.env.CORS_ORIGINS ?? ''),
   },
 });
 
@@ -43,5 +61,21 @@ export const mediaConfig = () => ({
       process.env.MEDIA_MAX_VIDEO_CHUNK_SIZE_MB ?? '10',
       10,
     ),
+  },
+});
+
+export const languageConfig = () => ({
+  language: {
+    supported: parseList(
+      process.env.SUPPORTED_LANGUAGES || DEFAULT_SUPPORTED_LANGUAGES,
+    ),
+    default: process.env.DEFAULT_LANGUAGE || FALLBACK_DEFAULT_LANGUAGE,
+  },
+});
+
+export const websiteConfig = () => ({
+  website: {
+    url: process.env.WEBSITE_URL,
+    revalidateSecret: process.env.WEBSITE_REVALIDATE_SECRET,
   },
 });

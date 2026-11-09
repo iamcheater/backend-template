@@ -3,5 +3,3 @@ export enum SupportedLanguage {
   HY = 'hy',
   RU = 'ru',
 }
-
-export const DEFAULT_LANGUAGE = SupportedLanguage.EN;
